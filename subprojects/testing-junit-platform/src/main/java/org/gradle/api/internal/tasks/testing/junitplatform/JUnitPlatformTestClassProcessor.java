@@ -17,6 +17,8 @@
 package org.gradle.api.internal.tasks.testing.junitplatform;
 
 import org.gradle.api.Action;
+import org.gradle.api.internal.tasks.testing.PreviousFailedTestClassRunInfo;
+import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestResultProcessor;
 import org.gradle.api.internal.tasks.testing.filter.TestSelectionMatcher;
 import org.gradle.api.internal.tasks.testing.junit.AbstractJUnitTestClassProcessor;
@@ -59,7 +61,7 @@ public class JUnitPlatformTestClassProcessor extends AbstractJUnitTestClassProce
     }
 
     @Override
-    protected Action<String> createTestExecutor(TestResultProcessor threadSafeResultProcessor, TestClassExecutionListener threadSafeTestClassListener) {
+    protected Action<TestClassRunInfo> createTestExecutor(TestResultProcessor threadSafeResultProcessor, TestClassExecutionListener threadSafeTestClassListener) {
         resultProcessor = threadSafeResultProcessor;
         executionListener = threadSafeTestClassListener;
         testClassExecutor = new CollectAllTestClassesExecutor();
@@ -77,12 +79,12 @@ public class JUnitPlatformTestClassProcessor extends AbstractJUnitTestClassProce
         throw new UnsupportedOperationException("stopNow() should not be invoked on remote worker TestClassProcessor");
     }
 
-    private class CollectAllTestClassesExecutor implements Action<String> {
+    private class CollectAllTestClassesExecutor implements Action<TestClassRunInfo> {
         private final List<Class<?>> testClasses = new ArrayList<>();
 
         @Override
-        public void execute(String testClassName) {
-            Class<?> klass = loadClass(testClassName);
+        public void execute(TestClassRunInfo testClassRunInfo) {
+            Class<?> klass = loadClass(testClassRunInfo);
             if (isTopClass(klass)) {
                 testClasses.add(klass);
             }
@@ -97,15 +99,19 @@ public class JUnitPlatformTestClassProcessor extends AbstractJUnitTestClassProce
     }
 
     private boolean isTopClass(Class<?> klass) {
-        return klass.getEnclosingClass() == null;
+        return klass != null && klass.getEnclosingClass() == null;
     }
 
-    private Class<?> loadClass(String className) {
+    private Class<?> loadClass(TestClassRunInfo testClassRunInfo) {
         try {
             ClassLoader applicationClassloader = Thread.currentThread().getContextClassLoader();
-            return Class.forName(className, false, applicationClassloader);
+            return Class.forName(testClassRunInfo.getTestClassName(), false, applicationClassloader);
         } catch (ClassNotFoundException e) {
-            throw UncheckedException.throwAsUncheckedException(e);
+            if (testClassRunInfo instanceof PreviousFailedTestClassRunInfo) {
+                return null;
+            } else {
+                throw UncheckedException.throwAsUncheckedException(e);
+            }
         }
     }
 

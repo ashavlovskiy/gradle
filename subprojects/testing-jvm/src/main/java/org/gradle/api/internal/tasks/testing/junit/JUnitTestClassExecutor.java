@@ -18,6 +18,8 @@ package org.gradle.api.internal.tasks.testing.junit;
 
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
+import org.gradle.api.internal.tasks.testing.PreviousFailedTestClassRunInfo;
+import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.filter.TestSelectionMatcher;
 import org.gradle.internal.concurrent.ThreadSafe;
 import org.junit.experimental.runners.Enclosed;
@@ -35,7 +37,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-public class JUnitTestClassExecutor implements Action<String> {
+public class JUnitTestClassExecutor implements Action<TestClassRunInfo> {
     private final ClassLoader applicationClassLoader;
     private final RunListener listener;
     private final JUnitSpec options;
@@ -50,12 +52,29 @@ public class JUnitTestClassExecutor implements Action<String> {
     }
 
     @Override
-    public void execute(String testClassName) {
-        executionListener.testClassStarted(testClassName);
+    public void execute(TestClassRunInfo testClassRunInfo) {
+        try {
+            Class<?> testClass = Class.forName(testClassRunInfo.getTestClassName(), false, applicationClassLoader);
+            execute(testClass);
+        } catch (ClassNotFoundException e) {
+            testClassNotFound(testClassRunInfo, e);
+        }
+    }
+
+    private void testClassNotFound(TestClassRunInfo testClassRunInfo, ClassNotFoundException e) {
+        if (testClassRunInfo instanceof PreviousFailedTestClassRunInfo) {
+            return;
+        }
+        executionListener.testClassStarted(testClassRunInfo.getTestClassName());
+        executionListener.testClassFinished(e);
+    }
+
+    private void execute(Class<?> testClass) {
+        executionListener.testClassStarted(testClass.getName());
 
         Throwable failure = null;
         try {
-            runTestClass(testClassName);
+            runTestClass(testClass);
         } catch (Throwable throwable) {
             failure = throwable;
         }
@@ -63,8 +82,7 @@ public class JUnitTestClassExecutor implements Action<String> {
         executionListener.testClassFinished(failure);
     }
 
-    private void runTestClass(String testClassName) throws ClassNotFoundException {
-        final Class<?> testClass = Class.forName(testClassName, false, applicationClassLoader);
+    private void runTestClass(final Class<?> testClass) {
         if (isInnerClassInsideEnclosedRunner(testClass)) {
             return;
         }
@@ -82,7 +100,7 @@ public class JUnitTestClassExecutor implements Action<String> {
 
             // For test suites (including suite-like custom Runners), if the test suite class
             // matches the filter, run the entire suite instead of filtering away its contents.
-            if (!runner.getDescription().isSuite() || !matcher.matchesTest(testClassName, null)) {
+            if (!runner.getDescription().isSuite() || !matcher.matchesTest(testClass.getName(), null)) {
                 filters.add(new MethodNameFilter(matcher));
             }
         }

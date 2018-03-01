@@ -17,6 +17,7 @@
 package org.gradle.api.internal.tasks.testing.testng;
 
 import org.gradle.api.GradleException;
+import org.gradle.api.internal.tasks.testing.PreviousFailedTestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestClassProcessor;
 import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestResultProcessor;
@@ -77,8 +78,10 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
         // TODO - do this inside some 'testng' suite, so that failures and logging are attached to 'testng' rather than some 'test worker'
         try {
             testClasses.add(applicationClassLoader.loadClass(testClass.getTestClassName()));
-        } catch (Throwable e) {
-            throw new GradleException(String.format("Could not load test class '%s'.", testClass.getTestClassName()), e);
+        } catch (ClassNotFoundException e) {
+            if (!(testClass instanceof PreviousFailedTestClassRunInfo)) {
+                throw new GradleException(String.format("Could not load test class '%s'.", testClass.getTestClassName()), e);
+            }
         }
     }
 

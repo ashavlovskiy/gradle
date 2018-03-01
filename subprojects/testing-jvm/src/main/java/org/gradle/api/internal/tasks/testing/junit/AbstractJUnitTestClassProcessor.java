@@ -34,7 +34,7 @@ public abstract class AbstractJUnitTestClassProcessor<T extends JUnitSpec> imple
     protected final IdGenerator<?> idGenerator;
     protected final Clock clock;
     private final ActorFactory actorFactory;
-    private Action<String> executor;
+    private Action<TestClassRunInfo> executor;
     private Actor resultProcessorActor;
 
     public AbstractJUnitTestClassProcessor(T spec, IdGenerator<?> idGenerator, ActorFactory actorFactory, Clock clock) {
@@ -58,12 +58,12 @@ public abstract class AbstractJUnitTestClassProcessor<T extends JUnitSpec> imple
         executor = createTestExecutor(threadSafeResultProcessor, threadSafeTestClassListener);
     }
 
-    protected abstract Action<String> createTestExecutor(TestResultProcessor threadSafeResultProcessor, TestClassExecutionListener threadSafeTestClassListener);
+    protected abstract Action<TestClassRunInfo> createTestExecutor(TestResultProcessor threadSafeResultProcessor, TestClassExecutionListener threadSafeTestClassListener);
 
     @Override
     public void processTestClass(TestClassRunInfo testClass) {
         LOGGER.debug("Executing test class {}", testClass.getTestClassName());
-        executor.execute(testClass.getTestClassName());
+        executor.execute(testClass);
     }
 
     @Override
